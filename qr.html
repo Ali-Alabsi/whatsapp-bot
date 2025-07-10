@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>WhatsApp QR Code</title>
+    <script src="https://cdn.rawgit.com/davidshimjs/qrcodejs/gh-pages/qrcode.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            background: #f0f2f5;
+        }
+        .container {
+            text-align: center;
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        #qrcode {
+            margin: 20px 0;
+            padding: 20px;
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        h1 {
+            color: #25D366;
+        }
+        .instructions {
+            margin-top: 20px;
+            color: #666;
+            max-width: 400px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>WhatsApp Bot QR Code</h1>
+        <p>Scan this QR code with your WhatsApp</p>
+        <div id="qrcode"></div>
+        <p>Or enter this code manually in WhatsApp Web:</p>
+        <div id="qr-string" style="word-break: break-all; margin: 15px 0; padding: 10px; background: #f8f8f8; border-radius: 5px;"></div>
+        <div class="instructions">
+            <p><strong>How to scan:</strong></p>
+            <ol>
+                <li>Open WhatsApp on your phone</li>
+                <li>Tap Menu (⋮) → Linked Devices</li>
+                <li>Tap 'Link a Device'</li>
+                <li>Scan the QR code above</li>
+            </ol>
+        </div>
+    </div>
+
+    <script>
+        // Get QR code from URL or use a placeholder
+        const urlParams = new URLSearchParams(window.location.search);
+        let qrData = urlParams.get('qr') || 'No QR data received';
+        
+        // Display QR code
+        new QRCode(document.getElementById("qrcode"), {
+            text: qrData,
+            width: 256,
+            height: 256,
+            colorDark : "#000000",
+            colorLight : "#ffffff",
+            correctLevel : QRCode.CorrectLevel.H
+        });
+        
+        // Display QR string
+        document.getElementById('qr-string').textContent = qrData;
+        
+        // Auto-refresh the page every 30 seconds to check for new QR code
+        setTimeout(() => {
+            window.location.reload();
+        }, 30000);
+    </script>
+</body>
+</html>

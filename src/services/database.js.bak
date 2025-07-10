@@ -1,0 +1,486 @@
+const mysql = require('mysql2/promise');
+const path = require('path');
+const config = require('../config/db.config').development;
+const { logger } = require('../utils/logger');
+
+let pool = null;
+let isInitialized = false;
+
+async function initialize() {
+    if (isInitialized && pool) {
+        logger.info('Database already initialized');
+        return true;
+    }
+
+    try {
+        // إنشاء اتصال pool جديد
+        pool = mysql.createPool({
+            host: config.host,
+            user: config.username,
+            password: config.password,
+            database: config.database,
+            port: config.port,
+            waitForConnections: true,
+            connectionLimit: 10,
+            queueLimit: 0,
+            charset: 'utf8mb4',
+            timezone: '+00:00',
+            namedPlaceholders: true
+        });
+
+        // اختبار الاتصال
+        const connection = await pool.getConnection();
+        logger.info('Successfully connected to MySQL database');
+        
+        // إنشاء الجداول إذا لم تكن موجودة
+        await createTables(connection);
+        
+        // تحرير الاتصال
+        connection.release();
+        
+        isInitialized = true;
+        return true;
+    } catch (error) {
+        logger.error('Error initializing MySQL database:', error);
+        throw error;
+    }
+}
+
+async function close() {
+    if (pool) {
+        await pool.end();
+        pool = null;
+        isInitialized = false;
+        logger.info('✅ Database connection closed');
+    }
+            });
+            
+            // Enable WAL mode for better concurrency
+            await db.run('PRAGMA journal_mode = WAL');
+            await db.run('PRAGMA synchronous = NORMAL');
+            await db.run('PRAGMA busy_timeout = 30000');
+            
+            logger.info(`✅ Database connection established (${dbExists ? 'existing' : 'new'} database)`);
+            
+            // Test the connection
+            const result = await db.get('SELECT 1 as test');
+            if (result && result.test === 1) {
+}
+
+async function createTables(connection) {
+    try {
+        logger.info('Creating database tables if they do not exist...');
+        
+        // Create database if it doesn't exist
+        await connection.query(`CREATE DATABASE IF NOT EXISTS \`${config.database}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;`);
+        await connection.query(`USE \`${config.database}\`;`);
+        
+        // Create users table
+        await connection.query(`
+            CREATE TABLE IF NOT EXISTS \`users\` (
+                \`id\` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+                \`phone_number\` VARCHAR(20) NOT NULL,
+                \`name\` VARCHAR(255) DEFAULT NULL,
+                \`is_subscribed\` TINYINT(1) NOT NULL DEFAULT 1,
+                \`language\` VARCHAR(10) NOT NULL DEFAULT 'ar',
+                \`is_admin\` TINYINT(1) NOT NULL DEFAULT 0,
+                \`last_seen\` DATETIME DEFAULT NULL,
+                \`message_count\` INT UNSIGNED NOT NULL DEFAULT 0,
+                \`created_at\` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                \`updated_at\` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                PRIMARY KEY (\`id\`),
+                UNIQUE KEY \`users_phone_number_unique\` (\`phone_number\`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        `);
+        
+        // Create messages table
+        await connection.query(`
+            CREATE TABLE IF NOT EXISTS \`messages\` (
+                \`id\` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+                \`message_id\` VARCHAR(255) NOT NULL,
+                \`from_number\` VARCHAR(20) NOT NULL,
+                \`to_number\` VARCHAR(20) NOT NULL,
+                \`content\` TEXT NOT NULL,
+                \`message_type\` VARCHAR(50) DEFAULT 'text',
+                \`is_command\` TINYINT(1) NOT NULL DEFAULT 0,
+                \`command_name\` VARCHAR(100) DEFAULT NULL,
+                \`is_processed\` TINYINT(1) NOT NULL DEFAULT 0,
+                \`error_message\` TEXT,
+                \`created_at\` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                \`updated_at\` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                PRIMARY KEY (\`id\`),
+                UNIQUE KEY \`messages_message_id_unique\` (\`message_id\`),
+                KEY \`idx_messages_from_number\` (\`from_number\`),
+                KEY \`idx_messages_created_at\` (\`created_at\`),
+                KEY \`idx_messages_is_processed\` (\`is_processed\`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        `);
+        
+        // Create scheduled_messages table
+        await connection.query(`
+            CREATE TABLE IF NOT EXISTS \`scheduled_messages\` (
+                \`id\` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+                \`name\` VARCHAR(255) DEFAULT NULL,
+                \`description\` TEXT,
+                \`cron_expression\` VARCHAR(100) NOT NULL,
+                \`message\` TEXT NOT NULL,
+                \`target_type\` ENUM('ALL', 'GROUP', 'INDIVIDUAL') NOT NULL DEFAULT 'ALL',
+                \`target_id\` VARCHAR(255) DEFAULT NULL,
+                \`is_active\` TINYINT(1) NOT NULL DEFAULT 1,
+                \`last_run\` DATETIME DEFAULT NULL,
+                \`next_run\` DATETIME DEFAULT NULL,
+                \`created_by\` VARCHAR(255) DEFAULT NULL,
+                \`created_at\` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                \`updated_at\` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                PRIMARY KEY (\`id\`),
+                KEY \`idx_scheduled_messages_next_run\` (\`next_run\`, \`is_active\`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        `);
+        
+        // Create auto_replies table
+        await connection.query(`
+            CREATE TABLE IF NOT EXISTS \`auto_replies\` (
+                \`id\` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+                \`name\` VARCHAR(255) DEFAULT NULL,
+                \`keyword\` VARCHAR(255) NOT NULL,
+                \`keyword_type\` ENUM('CONTAINS', 'EXACT', 'STARTS_WITH', 'ENDS_WITH', 'REGEX') NOT NULL DEFAULT 'CONTAINS',
+                \`response\` TEXT NOT NULL,
+                \`response_type\` VARCHAR(50) NOT NULL DEFAULT 'TEXT',
+                \`is_active\` TINYINT(1) NOT NULL DEFAULT 1,
+                \`priority\` INT NOT NULL DEFAULT 0,
+                \`created_by\` VARCHAR(255) DEFAULT NULL,
+                \`created_at\` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                \`updated_at\` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                PRIMARY KEY (\`id\`),
+                KEY \`idx_auto_replies_keyword\` (\`keyword\`, \`is_active\`),
+                KEY \`idx_auto_replies_priority\` (\`priority\`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        `);
+        
+        // Create message_stats table
+        await connection.query(`
+            CREATE TABLE IF NOT EXISTS \`message_stats\` (
+                \`id\` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+                \`date\` DATE NOT NULL,
+                \`total_messages\` INT UNSIGNED NOT NULL DEFAULT 0,
+                \`commands_processed\` INT UNSIGNED NOT NULL DEFAULT 0,
+                \`errors_occurred\` INT UNSIGNED NOT NULL DEFAULT 0,
+                \`created_at\` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                \`updated_at\` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                PRIMARY KEY (\`id\`),
+                UNIQUE KEY \`message_stats_date_unique\` (\`date\`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        `);
+        
+        // Create user_sessions table
+        await connection.query(`
+            CREATE TABLE IF NOT EXISTS \`user_sessions\` (
+                \`id\` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+                \`user_id\` INT UNSIGNED NOT NULL,
+                \`session_id\` VARCHAR(255) NOT NULL,
+                \`device_info\` TEXT,
+                \`last_activity\` DATETIME DEFAULT NULL,
+                \`expires_at\` DATETIME DEFAULT NULL,
+                \`is_active\` TINYINT(1) NOT NULL DEFAULT 1,
+                \`created_at\` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (\`id\`),
+                UNIQUE KEY \`user_sessions_session_id_unique\` (\`session_id\`),
+                KEY \`idx_user_sessions_user_id\` (\`user_id\`),
+                KEY \`idx_user_sessions_expires_at\` (\`expires_at\`),
+                CONSTRAINT \`user_sessions_user_id_foreign\` FOREIGN KEY (\`user_id\`) REFERENCES \`users\` (\`id\`) ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        `);
+        
+        // Create schema_migrations table
+        await connection.query(`
+            CREATE TABLE IF NOT EXISTS \`schema_migrations\` (
+                \`version\` INT NOT NULL,
+                \`name\` VARCHAR(255) NOT NULL,
+                \`applied_at\` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (\`version\`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        `);
+        
+        logger.info('✅ Database tables created successfully');
+        
+        // Insert initial data if needed
+        await initializeDefaultData(connection);
+        
+    } catch (error) {
+        logger.error('❌ Error creating database tables:', error);
+        throw error;
+    }
+}
+
+async function initializeDefaultData() {
+    try {
+        // Check if we've already initialized
+        const check = await db.get("SELECT name FROM sqlite_master WHERE type='table' AND name='users'");
+        if (!check) return; // Tables don't exist yet
+        
+        // Add default admin user if none exists
+        await initializeDefaultData();
+    } catch (error) {
+        logger.error('Error initializing default data:', error);
+        throw error;
+    }
+}
+
+async function getUser(phoneNumber) {
+    try {
+        const [rows] = await pool.query('SELECT * FROM users WHERE phone_number = ?', [phoneNumber]);
+        return rows[0] || null;
+    } catch (error) {
+        logger.error('Error getting user:', error);
+        throw error;
+    }
+}
+
+async function getScheduledMessages() {
+    try {
+        const now = new Date().toISOString();
+        const [rows] = await pool.query(
+            'SELECT * FROM scheduled_messages WHERE is_active = 1 AND (next_run IS NULL OR next_run <= ?) ORDER BY next_run ASC',
+            [now]
+        );
+        return rows;
+    } catch (error) {
+        logger.error('Error getting scheduled messages:', error);
+        throw error;
+    }
+}
+
+async function getAutoReplies() {
+    try {
+        const [rows] = await pool.query('SELECT * FROM auto_replies WHERE is_active = 1 ORDER BY priority DESC');
+        return rows;
+    } catch (error) {
+        logger.error('Error getting auto replies:', error);
+        throw error;
+    }
+}
+
+async function createUser(userData) {
+    const connection = await pool.getConnection();
+    try {
+        await connection.beginTransaction();
+        
+        const now = new Date().toISOString();
+        const [result] = await connection.query(
+            'INSERT INTO users (phone_number, name, is_subscribed, language, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
+            [
+                userData.phoneNumber,
+                userData.name || null,
+                userData.isSubscribed !== false ? 1 : 0,
+                userData.language || 'ar',
+                now,
+                now
+            ]
+        );
+        
+        // Get the newly created user
+        const [users] = await connection.query('SELECT * FROM users WHERE id = ?', [result.insertId]);
+        const user = users[0];
+        
+        await connection.commit();
+        logger.info(`✅ Created new user: ${user.phone_number}`);
+        return user;
+    } catch (error) {
+        await connection.rollback();
+        
+        if (error.code === 'ER_DUP_ENTRY') {
+            // User already exists, return the existing user
+            logger.info(`User already exists: ${userData.phoneNumber}`);
+            return getUser(userData.phoneNumber);
+        }
+        
+        logger.error('Error creating user:', error);
+        throw error;
+    } finally {
+        connection.release();
+    }
+}
+
+async function logMessage(messageData) {
+    const connection = await pool.getConnection();
+    try {
+        await connection.beginTransaction();
+        
+        const now = new Date().toISOString();
+        const [result] = await connection.query(
+            'INSERT INTO messages (message_id, from_number, to_number, content, message_type, is_command, command_name, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            [
+                messageData.messageId,
+                messageData.fromNumber,
+                messageData.toNumber,
+                messageData.content,
+                messageData.messageType || 'text',
+                messageData.isCommand ? 1 : 0,
+                messageData.commandName || null,
+                now,
+                now
+            ]
+        );
+        
+        // Update user's message count if it's an incoming message
+        if (messageData.direction === 'incoming' && messageData.fromNumber) {
+            await connection.query(
+                'UPDATE users SET message_count = message_count + 1, last_seen = ? WHERE phone_number = ?',
+                [now, messageData.fromNumber]
+            );
+        }
+        
+        await connection.commit();
+        logger.debug(`📝 Logged message from ${messageData.fromNumber} to ${messageData.toNumber}`);
+        return result.insertId;
+    } catch (error) {
+        await connection.rollback();
+        logger.error('Error logging message:', error);
+        throw error;
+    } finally {
+        connection.release();
+    }
+}
+
+// Export all the database functions
+module.exports = {
+    initialize,
+    close,
+    isInitialized: () => isInitialized,
+    getUser,
+    createUser,
+    logMessage,
+    getScheduledMessages,
+    getAutoReplies,
+    
+    /**
+     * Update message processing status
+     */
+    updateMessageProcessingStatus: async (messageId, isProcessed = true, error = null) => {
+        const connection = await pool.getConnection();
+        try {
+            await connection.query(
+                'UPDATE messages SET is_processed = ?, error_message = ?, updated_at = ? WHERE message_id = ?',
+                [isProcessed ? 1 : 0, error, new Date().toISOString(), messageId]
+            );
+            return true;
+        } catch (error) {
+            logger.error('Error updating message status:', error);
+            throw error;
+        } finally {
+            connection.release();
+        }
+    },
+    
+    /**
+     * Get message by ID
+     */
+    getMessage: async (messageId) => {
+        try {
+            const [rows] = await pool.query('SELECT * FROM messages WHERE message_id = ?', [messageId]);
+            return rows[0] || null;
+        } catch (error) {
+            logger.error('Error getting message:', error);
+            throw error;
+     */
+    async updateMessageStats(date) {
+        try {
+            const db = getDb();
+            
+            // Get message count for the date
+            const stats = await db.get(
+                `SELECT 
+                    COUNT(*) as total_messages,
+                    SUM(CASE WHEN is_command = 1 THEN 1 ELSE 0 END) as commands_processed,
+                    SUM(CASE WHEN error_message IS NOT NULL THEN 1 ELSE 0) as errors_occurred
+                FROM messages 
+                WHERE DATE(created_at) = ?`,
+                [date]
+            );
+            
+            // Update or insert stats
+            await db.run(
+                `INSERT INTO message_stats (
+                    date, total_messages, commands_processed, 
+                    errors_occurred, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT(date) DO UPDATE SET
+                    total_messages = excluded.total_messages,
+                    commands_processed = excluded.commands_processed,
+                    errors_occurred = excluded.errors_occurred,
+                    updated_at = excluded.updated_at`,
+                [
+                    date,
+                    stats?.total_messages || 0,
+                    stats?.commands_processed || 0,
+                    stats?.errors_occurred || 0,
+                    new Date().toISOString(),
+                    new Date().toISOString()
+                ]
+            );
+        } catch (error) {
+            logger.error('Error in updateMessageStats:', error);
+            // Don't throw to avoid crashing the application
+        }
+    },
+    
+    /**
+     * Get user statistics
+     * @returns {Promise<object>} User statistics
+     */
+    async getUserStats() {
+        try {
+            const db = getDb();
+            
+            const [
+                totalUsers,
+                activeUsers,
+                subscribedUsers,
+                usersByLanguage,
+                newUsersThisMonth
+            ] = await Promise.all([
+                // Total users
+                db.get('SELECT COUNT(*) as count FROM users'),
+                
+                // Active users (messaged in last 30 days)
+                db.get(`
+                    SELECT COUNT(DISTINCT from_number) as count 
+                    FROM messages 
+                    WHERE created_at >= datetime('now', '-30 days')
+                `),
+                
+                // Subscribed users
+                db.get("SELECT COUNT(*) as count FROM users WHERE is_subscribed = 1"),
+                
+                // Users by language
+                db.all(`
+                    SELECT 
+                        language, 
+                        COUNT(*) as count,
+                        ROUND(COUNT(*) * 100.0 / (SELECT COUNT(*) FROM users), 2) as percentage
+                    FROM users 
+                    GROUP BY language 
+                    ORDER BY count DESC
+                `),
+                
+                // New users this month
+                db.get(`
+                    SELECT COUNT(*) as count 
+                    FROM users 
+                    WHERE created_at >= date('now', 'start of month')
+                `)
+            ]);
+            
+            return {
+                totalUsers: totalUsers?.count || 0,
+                activeUsers: activeUsers?.count || 0,
+                subscribedUsers: subscribedUsers?.count || 0,
+                usersByLanguage: usersByLanguage || [],
+                newUsersThisMonth: newUsersThisMonth?.count || 0
+            };
+        } catch (error) {
+            logger.error('Error in getUserStats:', error);
+            throw error;
+        }
+    }
+};
